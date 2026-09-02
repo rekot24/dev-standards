@@ -1,0 +1,15 @@
+# Python
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
