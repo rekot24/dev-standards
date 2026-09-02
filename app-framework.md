@@ -579,3 +579,216 @@ This is not yet part of my standard workflow. It belongs here as a future layer 
 
 *Last updated: September 2026*
 *This document grows as new patterns are identified and learned.*
+
+---
+
+## Layer 13 — No magic numbers (or magic strings)
+
+### What it is
+No raw values sitting in logic code with no explanation of what they are or where they came from. If a number or string means something, it gets a name.
+
+### Why it matters
+A raw number in the middle of code is unreadable to anyone — including yourself six months later. A named constant is self-documenting and changeable in one place instead of hunting through every file.
+
+### The rule
+> Every meaningful value gets a name. Every name gets a comment if the value isn't obvious.
+
+### What it looks like
+```python
+# Bad — what is 2147483647? Why that number?
+screen_timeout = 2147483647
+
+# Good — named, explained
+MAX_INT32 = 2147483647   # max 32-bit integer — used as "never timeout"
+screen_timeout = MAX_INT32
+```
+
+### Applies to strings too
+```python
+# Bad
+if state == "IN_RUN":
+
+# Good
+STATE_IN_RUN = "IN_RUN"
+if state == STATE_IN_RUN:
+```
+
+### Where constants live
+All named constants go in a dedicated file — not scattered across modules.
+```
+config/
+  constants.py    ← all named values, grouped and commented
+```
+
+---
+
+## Layer 14 — Repo hygiene
+
+### What it is
+Every file in the repo has a reason to be there. The root stays clean. Working files that are done either move to `docs/` or get deleted.
+
+### Why it matters
+A cluttered repo is hard to navigate and hard to hand off to Claude Code or another developer. A clean repo communicates professionalism and makes the structure obvious at a glance.
+
+### The rule
+> The root of the repo only contains files that are actively useful right now.
+
+### Standard root — nothing else
+```
+README.md         ← always — what this app is and how to run it
+CLAUDE.md         ← always — context file for Claude Code sessions
+ROADMAP.md        ← always — living document, future work and known issues
+.gitignore        ← always
+main.py           ← entry point (or index.js, etc.)
+requirements.txt  ← dependencies
+```
+
+### Working files lifecycle
+- `AUDIT.md` — created during an audit pass; once all items are resolved, summarize completion in ROADMAP.md and delete or move to `docs/`
+- Implementation notes — go in CLAUDE.md session log, not loose files
+- Experiment files — on a branch, never committed to main
+
+### The `docs/` folder
+Historical reference, architecture decisions, completed audits. Stuff worth keeping but not actively needed day to day.
+```
+docs/
+  audit-2026-09.md       ← completed audits, archived for reference
+  decisions.md           ← major architectural decisions and why
+```
+
+### ROADMAP.md is permanent and living
+Not just for audit items. Anything worth tracking goes here:
+- Future features
+- Known issues
+- Ideas to revisit
+- Technical debt notes
+- Completed milestones (checked off, not deleted — history matters)
+
+---
+
+## Layer 15 — Claude Code context (CLAUDE.md)
+
+### What it is
+A file named `CLAUDE.md` in the root of every repo. Claude Code reads this automatically at the start of every session. It is the briefing — everything Claude Code needs to know to work in this project without rediscovering it from scratch.
+
+### Why it matters
+Claude Code has no memory between sessions. Without CLAUDE.md, every session starts cold — it rediscovers the structure, re-asks questions that were already answered, and risks repeating decisions that were already made and rejected. CLAUDE.md is the continuity layer between sessions.
+
+### The rule
+> The last thing you do in every Claude Code session is tell it to update CLAUDE.md with what was done, what was decided, and what the current state is.
+
+This does not need to be in the prompt every time — it is in CLAUDE.md itself as a standing instruction. Claude Code reads it at the start, follows it at the end.
+
+### What CLAUDE.md contains
+
+**Project summary** — what the app does in 2-3 sentences.
+
+**Standards pointer** — direct link to dev-standards repo. Claude Code reads the rules before touching anything.
+
+**Architecture map** — key files and what each one is responsible for. How they connect. So it doesn't have to rediscover structure every session.
+
+**Key decisions** — choices made intentionally with the reason why. Prevents relitigating the same decisions next session.
+
+**Tried and rejected** — what was attempted and abandoned, and why. Just as important as what was kept. Prevents going back to approaches that already failed.
+
+**Current state** — what's working, what's in progress, what's known broken.
+
+**Session log** — dated list of what each session did. Meaningful changes and decisions only — not every line changed.
+
+**Standing instructions** — rules Claude Code follows every session without being told. Including the rule to update this file before closing.
+
+### CLAUDE.md template
+```markdown
+# CLAUDE.md
+
+> This file is read automatically at the start of every Claude Code session.
+> Follow all standing instructions below without being prompted.
+
+---
+
+## Project summary
+[What this app does in 2-3 sentences. Who uses it. What problem it solves.]
+
+## Standards
+This project follows https://github.com/Rekot24/dev-standards
+Read app-framework.md before making any architectural decisions.
+If asked to do something that conflicts with those standards, flag it before proceeding.
+
+## Architecture
+[Key files and what each one does — one line each]
+- main.py — entry point only, wires everything together
+- config/settings_store.py — live settings object, single source of truth
+- [add files as the project grows]
+
+## Key decisions
+[Date and reason for each intentional architectural choice]
+- [YYYY-MM-DD] Chose X over Y because Z
+
+## Tried and rejected
+[What was attempted and why it was abandoned — do not revisit these]
+- [YYYY-MM-DD] Attempted X — abandoned because Y
+
+## Current state
+- Working: []
+- In progress: []
+- Known broken: []
+
+## Session log
+[Most recent first. Date, what changed, what was decided.]
+### [YYYY-MM-DD]
+- 
+
+---
+
+## Standing instructions
+These apply every session without being included in the prompt:
+
+1. Read this file fully before touching any code.
+2. Read app-framework.md from the dev-standards repo before any architectural work.
+3. Before building anything, explain what you are going to do and why. Wait for confirmation.
+4. Flag anything that conflicts with dev-standards before proceeding.
+5. No magic numbers or magic strings — all values go in constants.py with a comment.
+6. No raw print statements — all output through the logger.
+7. Every function gets a docstring before implementation.
+8. At the end of every session, update this file:
+   - Add a dated entry to the session log
+   - Update current state (working / in progress / known broken)
+   - Add any new decisions to key decisions
+   - Add anything tried and abandoned to tried and rejected
+   - Commit the updated CLAUDE.md as the final commit of the session
+```
+
+### Where it lives
+Root of every repo, always. It is the first file created when a repo is initialized, after README.md.
+
+### What it is not
+- Not a substitute for code comments — those still explain the why inside the code
+- Not a place for implementation details — those live in the code and docstrings
+- Not optional — a repo without CLAUDE.md starts every session blind
+
+---
+
+## Updated new app checklist
+
+Before writing any feature code, these must exist:
+
+- [ ] CLAUDE.md created with standards pointer and standing instructions
+- [ ] README.md describing what the app does and how to run it
+- [ ] ROADMAP.md initialized (even if mostly empty)
+- [ ] .gitignore configured
+- [ ] Git repo initialized, first commit made
+- [ ] Data models defined (what shape is the data?)
+- [ ] constants.py created (even if empty — establishes the pattern)
+- [ ] Settings store with schema and defaults
+- [ ] Debug layer wired to settings store
+- [ ] Logging layer with levels and file output
+- [ ] Error handling strategy decided (what fails loudly vs gracefully?)
+- [ ] Folder structure following the standard above
+- [ ] Interface signatures written for major modules (inputs and outputs defined)
+- [ ] UI reads status and writes to store only — never calls workers directly
+- [ ] Every feature has an enabled flag in the settings store
+
+---
+
+*Last updated: September 2026*
+*This document grows as new patterns are identified and learned.*
