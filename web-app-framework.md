@@ -625,6 +625,7 @@ Before writing any feature code, these must exist:
 - [ ] Git repo initialized, first commit made
 - [ ] Supabase project created, region selected, RLS enabled
 - [ ] `src/lib/supabase.js` — single Supabase client instance created
+- [ ] Run `GRANT ALL ON ALL TABLES IN SCHEMA public TO anon; GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;` in SQL Editor — required when tables are created via SQL (not the Supabase UI); without this, all queries return permission denied regardless of RLS setting
 - [ ] `src/constants/` folder created with index.js and jobStatuses.js
 - [ ] `operator_settings` table created with all three tiers (preferences, flags, plan)
 - [ ] `app_logs` table created
@@ -643,7 +644,7 @@ Before writing any feature code, these must exist:
 
 | Layer | Tool | Notes |
 |-------|------|-------|
-| Database | Supabase (PostgreSQL) | Single source of truth; RLS always enabled |
+| Database | Supabase (PostgreSQL) | Single source of truth; RLS always enabled; always run GRANT ALL ON ALL TABLES to anon + authenticated after creating tables via SQL |
 | Auth | Supabase Auth | Built in; never roll your own |
 | Frontend | React + Vite | Vite for fast dev and builds |
 | Hosting | Vercel | Deploys on every push to main |
