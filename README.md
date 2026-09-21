@@ -83,6 +83,7 @@ Every app I build includes these from day one, regardless of stack:
 
 **Python project:**
 1. Read `app-framework.md` before writing any code
+1b. Read `web-frontend-design.md` before writing any CSS
 2. Copy `templates/CLAUDE.md` into the project root and fill it in
 3. Copy `templates/project-structure.md` and use it as the folder layout
 4. Copy relevant snippets from `snippets/`
