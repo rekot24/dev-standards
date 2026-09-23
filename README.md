@@ -34,6 +34,7 @@ The implementation details differ. Read the document that matches your project.
 | `web-app-framework.md` | React + Supabase framework — same 15 layers, web implementation |
 | `templates/` | Starter files for new projects |
 | `snippets/` | Reusable code patterns ready to drop into any project |
+| `web-patterns.md` | Decision guide — which pattern to use and when, with real project references |
 
 ### Templates
 
