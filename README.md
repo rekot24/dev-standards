@@ -44,6 +44,7 @@ The implementation details differ. Read the document that matches your project.
 | `templates/CLAUDE-web.md` | Claude session context file for React + Supabase projects |
 | `templates/project-structure.md` | Folder layout for Python projects |
 | `templates/web-project-structure.md` | Folder layout for React + Vite + Supabase projects |
+| `templates/PROJECT-INSTRUCTIONS.md` | Baseline project instructions for any new project: working loop, shared folder, safety, quick-start checklist |
 
 ### Snippets
 
@@ -101,4 +102,4 @@ Every app I build includes these from day one, regardless of stack:
 
 ---
 
-*This document grows as new patterns are identified. Last updated: September 2026.*
+*This document grows as new patterns are identified. Last updated: October 2026.*
