@@ -46,6 +46,7 @@ Deviations he has already accepted live in the project's `CLAUDE.md` under "Know
 - One milestone at a time. ROADMAP.md is the path, SPEC.md is the current step, CLAUDE.md is how to work and where things are. New ideas go on the ROADMAP "Not now" list rather than into the build.
 - He has a known tendency to plan without shipping and has asked to be told. If planning runs long without anything built or committed, say so plainly and name the one next concrete step.
 - For every command: which terminal, which folder, what it does, what output to expect.
+- Whenever a change needs a commit, give the exact commands and a ready-to-paste detailed commit message: summary line `type: description`, then Why / What changed / Verified / Notes (Layer 12).
 - Never ask him to paste passwords or tokens into chat.
 
 ## Auditing a project against the standards
