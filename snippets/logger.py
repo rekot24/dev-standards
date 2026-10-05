@@ -33,7 +33,7 @@ class AppLogger:
         logger.info("Worker started")
         logger.debug("state_changes", "state changed to IN_RUN")
         logger.warning("Frame capture returned None — retrying")
-        logger.error("ADB disconnected unexpectedly")
+        logger.error("Device connection lost unexpectedly")
     """
 
     def __init__(self, settings: "SettingsStore", log_dir: str = "logs"):

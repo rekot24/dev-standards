@@ -1,0 +1,43 @@
+# templates/ci/web-ci.yml
+# Copy to .github/workflows/ci.yml in a Next.js project.
+# Runs on every pull request and every push to main. Make it a REQUIRED status check
+# (GitHub: Settings → Branches → branch protection on main) so "main is always deployable" is enforced.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22          # pin to the project's Node LTS; keep in sync with package.json "engines"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck      # package.json: "typecheck": "tsc --noEmit"
+      - run: npm test               # Vitest
+      - run: npm run build
+        env:
+          # Public, non-secret placeholders so the build can validate env. Never put real secrets here.
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+
+  # Optional once flows exist: end-to-end tests against a preview deployment
+  # e2e:
+  #   needs: check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 22, cache: npm }
+  #     - run: npm ci
+  #     - run: npx playwright install --with-deps chromium
+  #     - run: npx playwright test

@@ -9,7 +9,9 @@
 > - **The pattern** — what to use
 > - **Why it fits** — the reasoning
 > - **When NOT to use it** — the exceptions
-> - **Reference** — real example from a project
+> - **Example implementation** — a real project that follows the pattern, so you can copy working code
+>
+> Patterns are written generically. Project names appear only in the *Example implementation* line.
 
 ---
 
@@ -28,6 +30,10 @@
 11. [Variable lookup rule — module CSS enforcement](#11-variable-lookup-rule)
 12. [CSS audit — inheriting or cleaning up a stylesheet](#12-css-audit)
 13. [Cross-platform design tokens — Style Dictionary](#13-style-dictionary)
+14. [Server data — TanStack Query hooks](#14-server-data)
+15. [Multi-tenant data access — RLS membership policies](#15-tenant-rls)
+16. [Overlays — drawers, dialogs, and menus](#16-overlays)
+17. [Settings, flags and entitlements — who owns what](#17-settings-ownership)
 
 ---
 
@@ -61,12 +67,15 @@ Tapping one deselects it. Each group has a "Select all / Clear" shortcut.
 - Scales to any number of filter dimensions without crowding the page
 - Sort as a dropdown eliminates hidden toggle behavior (click-to-flip-direction)
 
+**Accessibility:** the drawer is an overlay — follow pattern #16 (focus moves in, is contained, Escape closes,
+focus returns to the Filters button). Chip toggles are `<button aria-pressed>`; the badge count is also in the button's text.
+
 **When NOT to use it:**
 - Fewer than 3 filter dimensions — a simple row of chips inline is fine
 - The data is tabular (use a data table with column sort headers instead)
 - Filters change so rarely that a settings page is more appropriate
 
-**Reference:** befish.cc Fish Dex — 300 cards, 5 tier filters, 6 rarity filters,
+**Example implementation:** befish.cc Fish Dex — 300 cards, 5 tier filters, 6 rarity filters,
 4 sort options, compare mode, measured-only toggle. Previously scattered across
 4 separate control rows. Redesigned to filter drawer in Phase 4.
 
@@ -121,7 +130,7 @@ Search needs anchor IDs on every section. If you build pages first and add
 search later, you revisit every page to add IDs and index entries. Build the
 search component and index structure first, populate entries as each page is built.
 
-**Reference:** befish.cc — search indexes How to Play (6 sections), Tips (6),
+**Example implementation:** befish.cc — search indexes How to Play (6 sections), Tips (6),
 Mechanics (14). Built in Phase 2 before any content pages were written.
 "/" keyboard shortcut follows Wikipedia convention.
 
@@ -159,7 +168,7 @@ Floating sidebar that overlaps content. Fixed position, box shadow, visible at
 all times. Common in early 2010s web design. Replaced by sticky horizontal bars
 and site-wide search in modern implementations.
 
-**Reference:** befish.cc Game Mechanics — 14 sections. Sticky nav planned then
+**Example implementation:** befish.cc Game Mechanics — 14 sections. Sticky nav planned then
 dropped when site-wide search was confirmed to cover all 14 sections with anchor
 links. Search made the component unnecessary.
 
@@ -194,7 +203,7 @@ taxonomy, and the complete 6-layer design system.
   writing a single component rule
 - Prevents drift: same value hand-typed in 12 places
 
-**Reference:** befish.cc — src/app/globals.css, 533 lines, 181 variables.
+**Example implementation:** befish.cc — src/app/globals.css, 533 lines, 181 variables.
 Established before any component was written. Audit of static site found the
 same hex values repeated dozens of times across component files.
 
@@ -235,7 +244,7 @@ Two font-family tokens only:
 
 Never type a font-family string in a component CSS rule.
 
-**Reference:** befish.cc — discovered during style audit that "font-family: Fredoka One"
+**Example implementation:** befish.cc — discovered during style audit that "font-family: Fredoka One"
 appeared in 35 separate CSS rules. Replaced with var(--font-display) in one globals
 entry, eliminating all 35 repetitions.
 
@@ -268,7 +277,7 @@ Use the classes directly in JSX/HTML:
   variant props is justified
 - Icon-only buttons with radically different sizing needs
 
-**Reference:** befish.cc static site had .compare-action-btn--primary and
+**Example implementation:** befish.cc static site had .compare-action-btn--primary and
 .profile-action-btn--primary as byte-for-byte identical CSS blocks. Next.js
 rebuild uses .btn-primary and .btn-secondary globally — one definition, used everywhere.
 
@@ -308,7 +317,7 @@ This is the contract between globals and the component.
 - InfoCard tokens were reused for boost cards, pass cards, and gem cards
   without any extra CSS
 
-**Reference:** befish.cc — --info-card-bg, --info-card-border, --info-card-val-color
+**Example implementation:** befish.cc — --info-card-bg, --info-card-border, --info-card-val-color
 defined in globals section 10. Four different card types all use the same tokens,
 so they all switch themes identically with zero per-component changes.
 
@@ -343,7 +352,7 @@ When a new alpha value is needed during component build (as happened during
 Search and TipBox components), add a named token to globals rather than
 hand-typing the rgba value in the component.
 
-**Reference:** befish.cc style audit found rgba(0, 240, 222, 0.08) hand-typed
+**Example implementation:** befish.cc style audit found rgba(0, 240, 222, 0.08) hand-typed
 6 times across component files. During the Search component build, two new
 tokens were added: --border-interactive and --border-interactive-hover.
 During the TipBox build, --tip-box-bg was added. Each time, a token was added
@@ -397,7 +406,7 @@ befish.cc example:
 - Purple (dark) / Orange (light): primary UI color, switches between themes
 - Orange: theme-independent CTA on the home page hero
 
-**Reference:** befish.cc — --section-header switches purple to orange between
+**Example implementation:** befish.cc — --section-header switches purple to orange between
 themes. --accent (cyan) intentionally stays the same in both. Documented in
 CLAUDE.md design theme section after this distinction was discovered mid-build.
 
@@ -421,7 +430,7 @@ in component CSS.
 Every CSS file uses only these two tokens. Never write a font-family string
 in a component rule. Two families maximum.
 
-**Reference:** befish.cc style audit — "font-family: Fredoka One, sans-serif"
+**Example implementation:** befish.cc style audit — "font-family: Fredoka One, sans-serif"
 appeared in 35 CSS rules. "font-family: Nunito, sans-serif" appeared in 28 more.
 Both replaced with var(--font-display) and var(--font-body).
 
@@ -456,7 +465,7 @@ Before writing any value in a .module.css file:
 4. No hardcoded hex, font strings, font-size literals, or font-weight numbers
 ```
 
-**Reference:** befish.cc — Nav.module.css had `color: var(--nat-text)` where
+**Example implementation:** befish.cc — Nav.module.css had `color: var(--nat-text)` where
 --nat-text was never defined. The correct token was --nav-text, already in globals.
 This broke nav link colors silently (resolved to nothing).
 
@@ -496,7 +505,7 @@ Output as a .md file in the repo with three sections matching the three phases.
 Phase 2 as a decision table. Phase 3 as a table with a "suggested variable name"
 column. This file becomes the source of truth for the cleanup work.
 
-**Reference:** befish.cc — style-audit.md produced for style.css before the
+**Example implementation:** befish.cc — style-audit.md produced for style.css before the
 Next.js rebuild. Identified 35 font-family repetitions, 6+ alpha value
 repetitions, and multiple exact-duplicate class pairs. The audit directly
 informed the entire globals.css token system for the rebuild.
@@ -529,11 +538,110 @@ The JSON source file looks almost identical to what is in globals.css for a
 web project. Converting an existing token system to Style Dictionary is mostly
 a reformatting exercise — the thinking is already done.
 
-**Reference:** befish.cc is web-only. Noted as future consideration if a
+**Example implementation:** befish.cc is web-only. Noted as future consideration if a
 mobile companion app is built.
 
 ---
 
+## 14. Server data
+
+**When this comes up:**
+A component needs data from the database or an API, or changes it.
+
+**The pattern: Component → hook (TanStack Query) → `api.ts` → Supabase**
+- `api.ts` holds the only database calls for a feature. Functions **throw** on error and validate results with zod.
+- The hook wraps `useQuery` / `useMutation`. Query keys live in one `keys` object per feature.
+- Mutations call `invalidateQueries` on success so affected lists refetch. Use optimistic updates only where instant feedback matters (toggles, settings) and always roll back on error.
+- Components handle the three states (`isPending`, `isError`, empty) and nothing else about fetching.
+
+**Why it fits:**
+- Caching, de-duplication, retries, and background refresh come free — no hand-written `useState` + `try/catch/finally` in every hook.
+- Components stay free of fetching logic, so they are simple to test.
+- Errors are logged once, in one place.
+
+**When NOT to use it:**
+- Data that only needs to be read once on the server — fetch it in a server component and pass props.
+- Pure UI state (open/closed, selected tab) — `useState`.
+
+**Example implementation:** `snippets/useQueryExample.ts`; settings store in `snippets/useSettings.tsx`.
+
+---
+
+## 15. Tenant RLS
+
+**When this comes up:**
+More than one account (or one user among many) shares a database, and nobody may see anyone else's rows.
+
+**The pattern: every table has `tenant_id`; a membership helper function; four policies per table**
+- `is_tenant_member(tenant_id)` is a `SECURITY DEFINER` function using `(select auth.uid())`.
+- Policies for select / insert / update / delete all call it; `update` has both `using` and `with check`.
+- Index `tenant_id` — the policies filter on it.
+- Entitlement tables (plans) grant `select` only; the service role writes them.
+- A two-user isolation test runs in CI.
+
+**Why it fits:**
+- Security is enforced in the database, so a bug in the UI or an API route cannot leak data.
+- Going from single-user to team is adding rows to `tenant_members`, not rewriting queries.
+
+**When NOT to use it:**
+- A truly public read-only table (publish it deliberately with an explicit `anon` select policy, and say so in a comment).
+- Data accessed only by server jobs with the service role — still enable RLS (deny-all) so a leaked client key reveals nothing.
+
+**Example implementation:** `snippets/rls-tenant.sql`.
+
+---
+
+## 16. Overlays
+
+**When this comes up:**
+A drawer, modal dialog, dropdown menu, popover, or toast appears on top of the page.
+
+**The pattern: native `<dialog>` (or a well-maintained headless library) + the five behaviors**
+1. Focus moves into the overlay on open.
+2. Focus stays inside while it is open (modal only).
+3. **Escape** closes it.
+4. Focus returns to the element that opened it.
+5. The page behind is inert / not scrollable while a modal is open.
+
+Layering uses the named `--z-*` tokens, never raw numbers. Toasts and status messages use `role="status"` (polite) or `role="alert"` (errors).
+
+**Why it fits:**
+- These five behaviors are the most common accessibility failures; the native element provides most of them for free.
+- A single shared `Overlay` component means each new drawer or modal inherits correct behavior.
+
+**When NOT to use it:**
+- Content that can simply be a section of the page. An overlay is a cost; use one only when context must be preserved underneath.
+
+**Example implementation:** the filter drawer in pattern #1.
+
+---
+
+## 17. Settings ownership
+
+**When this comes up:**
+You are about to store a configurable value, a feature toggle, or a plan/entitlement.
+
+**The pattern: three kinds, three owners**
+| Kind | Storage | Who writes |
+|---|---|---|
+| Preferences | Typed columns on `tenant_settings` | The tenant |
+| Flags | `flags` JSONB, valid keys in a code registry | The tenant |
+| Entitlements (plan) | `tenant_plans` table | Server only |
+
+Client checks (`useFeatureFlags`) decide what to show. Paid features are also enforced by an RLS policy or route handler.
+
+**Why it fits:**
+- Adding a flag is a code change, not a migration.
+- A tenant can never grant themselves a paid feature, because they cannot write the plan table.
+
+**When NOT to use it:**
+- Single-user local tools with no billing — a settings object without the plan table is fine.
+- If you need per-flag audit history or rollout rules, move flags to a rows table (decision record in `web-app-framework.md` Layer 1).
+
+**Example implementation:** `snippets/useSettings.tsx`, `snippets/useFeatureFlags.ts`, `snippets/constants.ts`.
+
+---
+
 *This document grows with real project work.*
-*When a new pattern is discovered, add it here with a real project reference.*
-*Last updated: September 2026 — patterns from befish.cc rebuild.*
+*When a new pattern is discovered, add it here with an example implementation.*
+*Last updated: October 2026.*

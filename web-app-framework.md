@@ -1,438 +1,308 @@
-# Web App Framework — React + Supabase Standard
+# Web App Framework — Next.js + TypeScript + Supabase
 
-> This document mirrors app-framework.md exactly in structure and principle.
-> The stack is different. The thinking is identical.
-> When building a React + Supabase + Vercel project, this is the reference.
-
----
-
-## Why a separate document
-
-app-framework.md was built for Python desktop apps — local file system, threading, ADB connections.
-Web apps run differently: the database is the persistence layer, the browser is the runtime, and
-multiple users share one system. Every principle from the Python framework applies. The
-implementation is different enough to deserve its own reference.
+> Mirrors `app-framework.md` in structure and principle. The stack is different; the thinking is identical.
+> This document is **project-agnostic**. Real projects appear only as *examples* in the README's
+> "Reference implementations" table and in `snippets/` — never as requirements.
 
 ---
 
-## The 15 layers (web edition)
+## Default stack and approved variants
 
-Every web app built to this standard includes all 15 layers from day one.
+| Concern | Default | Notes |
+|---|---|---|
+| Framework | **Next.js (App Router) + TypeScript** | Decided 2026-10-04. TypeScript strict mode on. |
+| Database / Auth / Storage | **Supabase** (Postgres) | RLS on every table, always. |
+| Hosting | **Vercel** | Preview deploy per PR; production deploys from `main`. |
+| Server state | **TanStack Query** | See Layer 4 and `web-patterns.md` #14. |
+| Validation | **zod** | At every boundary: forms, route handlers, webhooks, env vars. |
+| Tests | **Vitest** (unit) + **Playwright** (e2e) | See Layer 16. |
 
-1. **Settings store** — operator settings live in the database, read via React Context
-2. **Feature flags** — every feature has a database-driven on/off switch
-3. **Debug layer** — all debug output through one function, controlled by a settings flag
-4. **Modularity** — one file per concern, consistent folder structure across projects
-5. **Status and visibility** — health and state always surfaced, always visible
-6. **Error handling** — designed in from the start; fail loudly in dev, gracefully in production
-7. **Logging** — persistent record in Supabase, separate from debug output, with correct log levels
-8. **Code commenting** — comments explain why, not what; every function has a JSDoc comment
-9. **Data model first** — define data shapes before writing logic
-10. **Interface before implementation** — define inputs and outputs before writing the inside
-11. **Defensive programming** — never assume; verify, handle, log, and move on
-12. **Git as a thinking tool** — main is always working; branches are for experiments
-13. **No magic numbers** — all named values in constants files with comments
-14. **Repo hygiene** — root stays clean; every file has a reason to be there
-15. **CLAUDE.md context** — session continuity file, always present, always updated
+**Approved variant:** React + Vite SPA (internal tools, PWAs, projects that predate this decision).
+Everything below still applies except the Next.js-specific parts (`app/` routing, `error.tsx`, server actions).
+Record the variant — and any other departure — in the project's `CLAUDE.md` under **Known deviations**.
 
 ---
 
-## Layer 1 — Settings store (the config layer)
+## The 17 layers (web edition)
 
-### What it is
-A single source of truth for every configurable value in the app. In a web app,
-this lives in the database — not a local file. The UI writes to it. Every component
-reads from it via React Context. Nothing meaningful is hardcoded.
+Every web app built to this standard includes all 17 layers from day one.
 
-### Why it matters
-Hardcoded values require a code deploy to change. Settings in the database change
-instantly, per operator, without touching code. At scale, each operator has their
-own settings row. The app reads the right one automatically.
+1. **Settings store** — preferences, flags, and plan entitlements, each with the right owner
+2. **Feature flags** — every feature has a switch; paid features are enforced server-side
+3. **Debug layer** — one function, controlled by settings
+4. **Modularity** — one job per file; UI → hook → data layer
+5. **Status and visibility** — loading, error, and empty states designed up front
+6. **Error handling** — designed in, not patched on
+7. **Logging and monitoring** — persistent logs, crash reporting, uptime checks
+8. **Code commenting** — why, not what; TSDoc on every exported function
+9. **Data model first** — schema in migrations, types generated, shapes validated
+10. **Interface before implementation** — contract first, body second
+11. **Defensive programming** — never assume; validate every boundary
+12. **Git as a thinking tool** — `main` always deployable, enforced by CI
+13. **No magic numbers** — named constants with comments
+14. **Repo hygiene** — clean root, documented env vars
+15. **CLAUDE.md context** — session continuity file
+16. **Testing** — automated checks on the logic that must not break
+17. **Security and secrets** — RLS, least privilege, no secrets in the browser
+
+---
+
+## Layer 1 — Settings store
 
 ### The rule
 > Every configurable value lives in the settings store. Nothing meaningful is hardcoded in a component.
 
-### Three tiers of settings
+### Three kinds of settings — three different owners
 
-**Tier 1 — Operator preferences**
-Values the operator controls from the settings UI:
-- Default markup percentage
-- Labor rate
-- Quote follow-up timing (24hr default)
-- SMS message templates
-- Business name, logo, contact info
-- Invoice number format
-- Timezone
+| Kind | Examples | Stored as | Who can change it |
+|---|---|---|---|
+| **Preferences** | timezone, default rate, follow-up hours, templates | Typed columns on `tenant_settings` | The tenant |
+| **Flags** | which optional modules are on | One `flags` JSONB column on `tenant_settings` | The tenant |
+| **Plan entitlements** | `plan_tier` | Separate `tenant_plans` table | **Server only** (billing webhook / admin) |
 
-**Tier 2 — Feature flags**
-Entire features toggled on or off:
-- `photos_enabled` — photo documentation module
-- `hd_sync_enabled` — Home Depot purchase sync
-- `parts_tracking_enabled` — parts ordering + SMS tracking
-- `sms_followup_enabled` — automated quote follow-up
-- `bank_link_enabled` — Stripe Financial Connections
-- `accounting_enabled` — double-entry accounting module
+Why plans are separate: if a tenant can write their own row, they can switch on paid features.
+Entitlements must live in a table the tenant can read but never write.
 
-**Tier 3 — Plan tier config** (SaaS phase)
-What each subscription plan unlocks:
-- `plan_tier`: 'solo' | 'pro' | 'crew' | 'franchise'
-- Plan tier is checked before rendering any gated feature
-- Changing a plan tier in the database instantly changes what the operator sees
+### Why a `tenant`
+`tenant_id` is the owning account. For a single-user app it can simply equal the user's id.
+For a team app, add a `tenant_members` table. Using `tenant_id` from day one means going multi-user later
+is a policy change, not a rewrite.
 
-### Database table
+### Tables
 ```sql
-CREATE TABLE operator_settings (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  operator_id     UUID REFERENCES operators(id) ON DELETE CASCADE,
+create table tenant_settings (
+  id               uuid primary key default gen_random_uuid(),
+  tenant_id        uuid not null unique references tenants(id) on delete cascade,
 
-  -- Tier 1: Preferences
-  business_name         TEXT,
-  labor_rate_default    NUMERIC(10,2) DEFAULT 75.00,
-  markup_default        NUMERIC(5,4)  DEFAULT 0.20,
-  quote_followup_hrs    INTEGER       DEFAULT 24,
-  quote_alert_hrs       INTEGER       DEFAULT 48,
-  invoice_prefix        TEXT          DEFAULT 'NXW',
-  timezone              TEXT          DEFAULT 'America/Denver',
-  sms_template_quote    TEXT,
-  sms_template_followup TEXT,
-  sms_template_reminder TEXT,
+  -- Preferences: stable, typed, validated by the database
+  display_name       text,
+  timezone           text    not null default 'UTC',
+  default_rate_cents integer not null default 0  check (default_rate_cents >= 0),
+  followup_hours     integer not null default 24 check (followup_hours > 0),
 
-  -- Tier 2: Feature flags
-  photos_enabled          BOOLEAN DEFAULT true,
-  hd_sync_enabled         BOOLEAN DEFAULT false,
-  parts_tracking_enabled  BOOLEAN DEFAULT false,
-  sms_followup_enabled    BOOLEAN DEFAULT true,
-  bank_link_enabled       BOOLEAN DEFAULT false,
-  accounting_enabled      BOOLEAN DEFAULT true,
-  debug_enabled           BOOLEAN DEFAULT false,
+  -- Flags: tenant-controlled toggles. Valid keys and defaults live in code
+  -- (src/constants/flags.ts), so adding a flag needs NO migration.
+  flags              jsonb not null default '{}'::jsonb,
 
-  -- Debug sub-flags (only active when debug_enabled is true)
-  debug_log_state_changes  BOOLEAN DEFAULT true,
-  debug_log_api_calls      BOOLEAN DEFAULT false,
-  debug_log_settings_reads BOOLEAN DEFAULT false,
-  debug_log_render_cycles  BOOLEAN DEFAULT false,
+  -- Debug
+  debug_enabled      boolean not null default false,
+  debug_categories   text[]  not null default '{}',   -- e.g. {'state_changes','api_calls'}
 
-  -- Tier 3: Plan config
-  plan_tier     TEXT DEFAULT 'solo',  -- solo | pro | crew | franchise
-
-  updated_at    TIMESTAMPTZ DEFAULT now()
+  updated_at         timestamptz not null default now()
 );
+
+create table tenant_plans (
+  tenant_id   uuid primary key references tenants(id) on delete cascade,
+  plan_tier   text not null default 'free' check (plan_tier in ('free','pro','team')),
+  updated_at  timestamptz not null default now()
+);
+-- RLS: tenant may SELECT tenant_plans; INSERT/UPDATE only via the service role.
 ```
 
-### How it works in React
-
-Settings are loaded once when the app starts, held in React Context, and available
-to every component without prop drilling. When a setting changes, the context updates
-and every component that reads it re-renders automatically.
-
-```
-App starts
-  → useSettings() hook fetches operator_settings from Supabase
-  → Settings stored in SettingsContext
-  → Every component reads from context
-  → User changes a setting in the UI
-  → Hook updates Supabase + updates context
-  → All components re-render with new value immediately
-  → No page reload. No restart.
-```
-
-See `snippets/useSettings.js` for the full implementation pattern.
+### Decision record: JSONB flags vs a flags table
+Chosen: **JSONB column + a flag registry in code.**
+- *For:* a new flag is a code change only; one row read loads everything; simple.
+- *Against:* the database can't type-check individual flags — so the registry (with zod validation) is mandatory.
+- *Switch to a `feature_flags` rows table when* you need per-flag audit history, per-flag rollout rules,
+  or to join on flags constantly in SQL.
 
 ### The pattern (every component)
-```javascript
-// Never do this — hardcoded value buried in a component:
+```ts
+// Never: hardcoded value buried in a component
 const followUpHours = 24
 
-// Always do this — read from the settings store:
+// Always: read from the settings store
 const { settings } = useSettings()
-const followUpHours = settings.quote_followup_hrs
+const followUpHours = settings.followup_hours
 ```
+See `snippets/useSettings.tsx`.
 
 ---
 
-## Layer 2 — Feature flags (visibility and control)
-
-### What it is
-Every feature the app can perform has an explicit on/off switch in the database,
-readable from the settings store, and checked by the feature before it renders or runs.
-
-### Why it matters
-Without feature flags, you cannot ship partial features safely, you cannot give
-different operators different capabilities, and you cannot debug one feature without
-everything else running. Feature flags fix all three.
+## Layer 2 — Feature flags
 
 ### The rule
-> No feature renders or runs unconditionally. Every feature checks its flag before doing anything.
+> No feature renders or runs unconditionally. Every feature checks its flag first.
+> **A flag or plan check in the UI is for user experience only. Anything paid or sensitive is also enforced
+> on the server** (RLS policy, route handler, or edge function). A hidden button is not a lock.
 
 ### What qualifies as a feature
-- Any module with its own UI section (photos, HD sync, parts tracking)
-- Any automated background behavior (SMS follow-up, sync jobs)
-- Any integration with a paid third-party service (Twilio, Stripe, RapidAPI)
-- Any behavior that differs by plan tier
+Any module with its own UI section, any background behavior, any paid third-party integration,
+and anything that differs by plan.
 
-### How it looks in code
-```javascript
-// At the top of any feature component:
-const { isEnabled } = useFeatureFlags()
-
-if (!isEnabled('photos_enabled')) {
-  return null  // feature is off — render nothing
-}
+### Flag registry (single source of valid flags)
+```ts
+// src/constants/flags.ts
+export const FLAGS = {
+  photos:        { key: 'photos',        default: true  },
+  smsFollowup:   { key: 'smsFollowup',   default: false },
+} as const
+export type FlagKey = keyof typeof FLAGS
 ```
 
-### Plan tier gating (SaaS phase)
-Plan tier is a setting like any other. The `useFeatureFlags` hook handles
-both the boolean flag AND the plan tier check:
-
-```javascript
-// Feature available on Pro and above:
-if (!isEnabled('hd_sync_enabled') || !isPlan('pro', 'crew', 'franchise')) {
-  return <UpgradePrompt feature="Home Depot Sync" requiredPlan="Pro" />
-}
+### In code
+```tsx
+const { isEnabled, canAccess } = useFeatureFlags()
+if (!isEnabled('photos')) return null
+if (!canAccess('smsFollowup', 'pro', 'team')) return <UpgradePrompt feature="SMS follow-up" />
 ```
-
-See `snippets/useFeatureFlags.js` for the full implementation.
+Server-side enforcement example: `snippets/rls-tenant.sql` (plan-gated policy).
 
 ---
 
 ## Layer 3 — Debug layer
 
-### What it is
-A dedicated debug system controlled by the `debug_enabled` flag in the settings store.
-All debug output flows through one function — never scattered `console.log` statements.
-
 ### The rule
-> No raw `console.log` for debugging. All debug output goes through the debug logger.
-> In production, the flag is off and nothing leaks to the browser console.
+> No raw `console.log`. All debug output goes through `logger.debug(category, msg)`.
+> In production the flag is off and nothing leaks to the browser console.
 
-### How it looks in code
-```javascript
-// Never do this:
-console.log('state changed:', newState)
-
-// Always do this:
-logger.debug('state_changes', `state changed to ${newState}`)
-
-// The logger checks the flag before outputting — zero cost when disabled.
+```ts
+logger.debug('state_changes', `status changed to ${next}`)   // zero cost when disabled
 ```
-
-See `snippets/logger.js` for the full implementation.
+Enforce with an ESLint rule (`no-console`) so the standard checks itself. See `snippets/logger.ts`.
 
 ---
 
-## Layer 4 — Modularity standard
-
-### What it is
-Every file has one job. Files are organized by what they are responsible for.
-Components, hooks, utilities, and constants are separate concerns in separate folders.
+## Layer 4 — Modularity
 
 ### The rule
 > If a file does more than one thing, it should be two files.
 
-### Standard folder structure
+### Standard structure (Next.js App Router)
 ```
 src/
-  main.jsx                  ← entry point only; mounts the app
-  App.jsx                   ← root component; wires routing and context providers
-
-  constants/
-    index.js                ← all named values; no magic numbers anywhere else
-    jobStatuses.js          ← job status state machine constants
-    planTiers.js            ← plan tier definitions and hierarchy
-
-  context/
-    SettingsContext.jsx     ← React Context for operator settings
-    AuthContext.jsx         ← React Context for Supabase auth state
-
-  hooks/
-    useSettings.js          ← settings store read/write
-    useFeatureFlags.js      ← feature flag + plan tier checks
-    useJobs.js              ← job data fetching and mutations
-    useCustomers.js         ← customer data
-    useLogger.js            ← logging interface
-
-  components/
-    jobs/                   ← job list, job detail, status badge
-    quotes/                 ← quote builder, template selector, line items
-    customers/              ← customer profile, address list, communication log
-    photos/                 ← photo capture, gallery, upload progress
-    settings/               ← settings UI, feature flag toggles, plan info
-    shared/                 ← buttons, inputs, modals, loading states
-
-  lib/
-    supabase.js             ← Supabase client (one instance, imported everywhere)
-    logger.js               ← unified debug + logging layer
-    formatters.js           ← currency, dates, phone numbers — pure functions
-    validators.js           ← input validation — pure functions
-
-  styles/
-    globals.css             ← reset, CSS variables, typography
-    tokens.css              ← design tokens: colors, spacing, radius
+  app/                      ← routes, layouts, loading.tsx, error.tsx (thin: compose, don't implement)
+  features/<feature>/
+    components/             ← UI for this feature
+    hooks/                  ← useThing() — TanStack Query wrappers
+    api.ts                  ← the ONLY place that talks to Supabase for this feature
+    schemas.ts              ← zod schemas + inferred types
+  components/shared/        ← Button, Modal, LoadingState, ErrorState, EmptyState
+  context/                  ← AuthProvider, SettingsProvider, QueryProvider
+  constants/                ← index.ts, flags.ts, plans.ts, statuses.ts
+  lib/                      ← supabase clients, logger, money, formatters, validators (pure)
+  types/database.ts         ← GENERATED by `supabase gen types typescript` — never hand-edited
 ```
 
 ### The UI rule
-> UI components never call API functions directly. They call hooks. Hooks call the API.
+> Components never call the data layer directly. Components call hooks. Hooks call `api.ts`. `api.ts` calls Supabase.
 
 ```
-Component → Hook → Supabase
-Component reads ← Hook returns data
+Component → Hook (TanStack Query) → api.ts → Supabase
 ```
 
-This means components stay simple and testable. The data logic lives in one place.
+### Server state with TanStack Query (decision record, 2026-10-04)
+**What it is:** a library that manages data fetched from a server — caching, loading/error flags,
+refetching when stale, retries, and mutations that refresh the right data afterward.
+**Why:** without it, every hook re-implements `useState` + `try/catch/finally` + loading flags by hand
+(Layer 6's old pattern), and still lacks caching, de-duplication, and retry.
+**What it does not change:** the UI rule above. Hooks still exist — they wrap `useQuery`/`useMutation`.
+**Cost:** one dependency and one concept to learn. See `web-patterns.md` #14 and `snippets/useQueryExample.ts`.
 
 ---
 
 ## Layer 5 — Status and visibility
 
-### What it is
-Every feature that can be in a loading, error, or empty state surfaces that state visibly.
-The operator always knows what the app is doing.
-
 ### The rule
-> Loading, error, and empty states are designed for every feature — not added later.
+> Loading, error, and empty states are designed for every data-fetching component — not added later.
 
-### Standard state pattern for every data-fetching component
-```javascript
-const { data, loading, error } = useJobs()
+```tsx
+const { data, isPending, isError, error, refetch } = useThings()
 
-if (loading) return <LoadingSpinner label="Loading jobs..." />
-if (error)   return <ErrorMessage error={error} retry={refetch} />
-if (!data.length) return <EmptyState message="No jobs yet" action="Add your first job" />
-
-return <JobList jobs={data} />
+if (isPending) return <LoadingState label="Loading…" />
+if (isError)   return <ErrorState error={error} onRetry={refetch} />
+if (!data.length) return <EmptyState message="Nothing here yet" action="Add the first one" />
+return <ThingList items={data} />
 ```
-
-Three states. Always. Never assume data exists.
+Three states. Always. Next.js route-level equivalents: `loading.tsx` and `error.tsx`.
 
 ---
 
 ## Layer 6 — Error handling
 
-### What it is
-A deliberate, designed response to everything that can go wrong. Supabase calls fail.
-Twilio calls fail. The user has no internet. The session expires. All of these are
-designed for — not patched on.
-
 ### The rule
-> Every async function that can fail must decide: can I recover from this, or do I need to tell the user?
+> Every async function that can fail must decide: recover, or tell the user?
 
-### Two modes — by design
-**Development mode:** fail loudly. Log the full error. Surface the raw message to help debug.
+### Two modes
+- **Development:** fail loudly — full error, raw message.
+- **Production:** fail gracefully — log it, show a human message, keep the rest of the app running.
 
-**Production mode:** fail gracefully. Log the error to Supabase. Show the user a
-human-readable message. Keep the rest of the app running.
+Mode comes from the `debug_enabled` setting, not hardcoded.
 
-Mode is controlled by the `debug_enabled` settings flag — not hardcoded.
-
-### Standard async pattern (every Supabase call)
-```javascript
-// Every hook follows this exact pattern — no exceptions:
-const fetchJobs = async () => {
-  setLoading(true)
-  setError(null)
-  try {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    setJobs(data)
-  } catch (err) {
-    setError(err.message)
-    logger.error('jobs', 'fetch failed', { message: err.message })
-  } finally {
-    setLoading(false)
-  }
+### Standard pattern
+`api.ts` functions **throw**; TanStack Query catches and exposes `isError`; the logger records it once.
+```ts
+// features/things/api.ts
+export async function listThings(): Promise<Thing[]> {
+  const { data, error } = await supabase.from('things').select('*').order('created_at', { ascending: false })
+  if (error) throw error            // never return null data as if it were success
+  return data
 }
 ```
+### Never
+- `.catch(() => {})` that swallows errors
+- Leaving the UI in a broken in-between state
+- Showing raw database messages to end users in production
+- Assuming a call succeeded without checking `error`
 
-### What to never do
-- Never use `.catch(() => {})` that swallows errors silently
-- Never let a failed API call leave the UI in a broken in-between state
-- Never show a raw Supabase error message to an end user in production
-- Never assume a Supabase call succeeded without checking the `error` field
+Add `app/error.tsx` and `app/global-error.tsx` so a render crash never shows a blank page.
 
 ---
 
-## Layer 7 — Logging (separate from debugging)
+## Layer 7 — Logging and monitoring
 
-### The distinction
-Debug output is for right now, while you are watching the browser console.
-Logging is a persistent record of what the app did — written to Supabase,
-queryable after the fact, available even when you were not watching.
+### Three tools, three jobs
+| Tool | Answers | Where |
+|---|---|---|
+| Debug output | What is the app doing *right now*? | Browser console, flag-controlled |
+| Persistent logs | What happened, in order, after the fact? | `app_logs` table |
+| Crash/uptime monitoring | Is it broken, and did anyone notice? | Error tracker (e.g. Sentry) + uptime checker |
 
-### Why the database is the right log destination for a web app
-Log files do not exist in a serverless web app. The browser console disappears
-when the tab closes. Supabase is already the persistence layer — logging there
-means every event is stored, queryable, and available for reporting and debugging.
+Why monitoring is separate: a crashed app can't write to its own log table. Use an external error tracker
+for client and server exceptions, and an uptime check on the production URL.
 
-### Database table
+### Log table
 ```sql
-CREATE TABLE app_logs (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  operator_id  UUID REFERENCES operators(id),
-  job_id       UUID REFERENCES jobs(id),        -- optional context
-  level        TEXT NOT NULL,                   -- DEBUG INFO WARNING ERROR CRITICAL
-  category     TEXT NOT NULL,                   -- jobs, quotes, sms, photos, sync, auth
-  message      TEXT NOT NULL,
-  metadata     JSONB,                           -- any extra context as key/value
-  created_at   TIMESTAMPTZ DEFAULT now()
+create table app_logs (
+  id         uuid primary key default gen_random_uuid(),
+  tenant_id  uuid references tenants(id) on delete cascade,
+  level      text not null check (level in ('DEBUG','INFO','WARNING','ERROR','CRITICAL')),
+  category   text not null,
+  message    text not null,
+  metadata   jsonb,
+  created_at timestamptz not null default now()
 );
-
-CREATE INDEX idx_app_logs_operator ON app_logs(operator_id, created_at DESC);
-CREATE INDEX idx_app_logs_level    ON app_logs(level, created_at DESC);
+create index idx_app_logs_tenant on app_logs (tenant_id, created_at desc);
+create index idx_app_logs_level  on app_logs (level, created_at desc);
 ```
+RLS: authenticated users may **INSERT their own tenant's rows only** — no SELECT/UPDATE/DELETE from the client.
+Read logs from the dashboard or SQL editor.
 
-### Log levels — in plain English
-```
-DEBUG    → fine detail; only written when debug_enabled is true
-INFO     → normal milestones (job created, quote sent, payment received)
-WARNING  → unexpected but recoverable (SMS failed and will retry; SKU not found)
-ERROR    → something failed that should not have (Stripe webhook missed, sync crashed)
-CRITICAL → app cannot continue for this operator (auth broken, database unreachable)
-```
-
-### The rule
-> INFO and above always runs. DEBUG only runs when debug_enabled is true.
-> Use log levels correctly so you can filter after the fact.
-
-See `snippets/logger.js` for the full implementation.
+### Rules
+- INFO and above always runs. DEBUG only when `debug_enabled`.
+- **Never log secrets, tokens, full card/phone numbers, or other personal data.** Log ids, not content.
+- Set a **retention policy** (e.g. scheduled delete of rows older than 90 days) so the table can't grow forever.
+- Use the category constants (`LOG_CATEGORY`) so filtering is reliable.
 
 ---
 
-## Layer 8 — Code commenting standard
+## Layer 8 — Code commenting
 
-### The rule
-> Write comments for the person who reads this next — including yourself in six months.
-> If you had to think about a decision for more than thirty seconds, comment it.
+> Write comments for the next reader — including yourself in six months.
+> If a decision took more than thirty seconds, comment it.
 
-### JSDoc for every function
-```javascript
+TSDoc on every exported function and hook:
+```ts
 /**
- * Build a quote total from template materials and labor lines.
- * Applies the operator's default markup unless overridden per line.
+ * Sum line items and apply a markup.
+ * All money is integer cents — never floats (see Layer 17).
  *
- * @param {Array} materials - Array of job_materials rows with unit_price and quantity
- * @param {Array} labor - Array of job_labor rows with hours and rate
- * @param {number} markupRate - Decimal markup rate (0.20 = 20%)
- * @returns {{ subtotal: number, markup: number, total: number }}
+ * @param lines   Line items with unitPriceCents and quantity
+ * @param markup  Decimal markup (0.20 = 20%)
+ * @returns       subtotalCents, markupCents, totalCents
  */
-export const buildQuoteTotal = (materials, labor, markupRate) => {
-  // implementation
-}
 ```
-
-### Inline comments for non-obvious decisions
-```javascript
-// Lock price at quote time — never recalculate from current catalog price.
-// Past quotes must reflect what the customer was charged, not today's price.
-const unitPrice = catalogItem.current_price
-
-// Supabase returns null for empty relations, not an empty array.
-// Normalize here so the rest of the app can always assume an array.
-const materials = job.job_materials ?? []
-```
+Inline comments explain *why*: price locked at creation time, null normalization, workarounds.
 
 ---
 
@@ -441,64 +311,27 @@ const materials = job.job_materials ?? []
 ### The rule
 > Define data shapes before writing logic. Never build a component against data you have not modeled.
 
-### What this looks like in a React + Supabase project
-1. Define or confirm the database table first
-2. Define the JavaScript shape the component expects
-3. Write the hook that transforms database rows into that shape
-4. Then write the component
+1. Write the **migration** (table, constraints, RLS) — schema lives in `supabase/migrations/`, never only in the SQL editor.
+2. Regenerate types: `supabase gen types typescript` → `src/types/database.ts`.
+3. Write the **zod schema** for the shape the UI needs (`features/<x>/schemas.ts`).
+4. Write the **mapper** from database row to UI shape.
+5. Then the hook, then the component.
 
-```javascript
-// Define the shape first — what does a job card need?
-/**
- * @typedef {Object} JobSummary
- * @property {string} id
- * @property {string} status
- * @property {string} customer_name
- * @property {string} address_line
- * @property {string|null} quote_total
- * @property {string} created_at
- */
-
-// Write the transform that produces it:
-const toJobSummary = (row) => ({
-  id:            row.id,
-  status:        row.status,
-  customer_name: row.customers?.full_name ?? 'Unknown',
-  address_line:  row.addresses?.line1 ?? '',
-  quote_total:   row.invoices?.[0]?.total ?? null,
-  created_at:    row.created_at,
-})
-
-// Now the component can be written — the shape is locked in.
-```
+### Migration discipline
+- One migration per logical change; filenames sorted by timestamp; never edit a migration that has shipped.
+- Any change that can lose data is flagged **migration required** and gets a backup first.
+- A local seed file (`supabase/seed.sql`) with fake data lets anyone rebuild a dev database.
 
 ---
 
 ## Layer 10 — Interface before implementation
 
-### The rule
-> Name a function, define its inputs and outputs, write the JSDoc. Then implement.
-> Never the other way around.
+> Name the function, define inputs and outputs, write the TSDoc — then implement.
 
-### What this looks like for hooks
-```javascript
-/**
- * useJobs — fetch and manage job records for the current operator.
- *
- * @param {Object} [options]
- * @param {string} [options.status] - filter by job status
- * @param {string} [options.customerId] - filter by customer
- *
- * @returns {{
- *   jobs: JobSummary[],
- *   loading: boolean,
- *   error: string|null,
- *   refetch: () => void,
- *   updateStatus: (jobId: string, newStatus: string) => Promise<void>
- * }}
- */
-export const useJobs = (options = {}) => {
-  // implementation after the contract is defined
+```ts
+/** Fetch records for the current tenant, optionally filtered by status. */
+export function useThings(opts?: { status?: ThingStatus }): UseQueryResult<ThingSummary[], Error> {
+  // implementation after the contract is agreed
 }
 ```
 
@@ -506,159 +339,172 @@ export const useJobs = (options = {}) => {
 
 ## Layer 11 — Defensive programming
 
-### The rule
-> Never assume. Verify. Handle the failure case before writing the success case.
+> Never assume. Verify. Handle the failure case before the success case.
 
-### Defensive checks that always apply in a web app
-- Supabase row may not exist — check before accessing properties
-- Related data (joins) may be null — always provide fallbacks with `??`
-- User may not be authenticated — check before any protected operation
-- Network calls can fail at any time — always handle the error case
-- RLS may silently block a query — a 0-row result is not always an empty table
-
-```javascript
-// Defensive: normalize nulls from Supabase joins
-const customerName = job?.customers?.full_name ?? 'Unknown customer'
-const address      = job?.addresses?.line1 ?? 'No address on file'
-const materials    = job?.job_materials ?? []
-
-// Defensive: check auth before a protected action
-const { user } = useAuth()
-if (!user) {
-  logger.warning('auth', 'Attempted protected action without session')
-  return redirect('/login')
-}
-
-// Defensive: always check both outcomes from a Supabase call
-const { data, error } = await supabase.from('jobs').select()
-if (error) {
-  logger.error('jobs', 'fetch failed', { message: error.message })
-  return  // stop here — never proceed with null data
-}
-```
+- **Validate all external input with zod** — form data, route-handler bodies, webhook payloads, `process.env` (parse once at startup).
+- Joined relations may be `null` — normalize with `??`.
+- Check the session before protected actions (middleware + server-side check; never trust the client alone).
+- A **0-row result may mean RLS blocked it**, not that the table is empty.
+- Network calls fail: always handle the error branch.
 
 ---
 
 ## Layer 12 — Git as a thinking tool
 
-Same rule as the Python standard. This does not change with the stack.
-
-- `main` is always deployable. Vercel deploys on every push to main — broken code = broken production.
-- Every feature or experiment gets its own branch.
-- Commit message format: `type: description`
-  - `feat: add photo upload to job detail`
-  - `fix: quote total not recalculating when markup changes`
-  - `refactor: extract quote builder logic into useQuote hook`
-  - `docs: update CLAUDE.md with Phase 2 session log`
-  - `schema: add job_photos table`
-- One logical change per commit. If you need "and" in the message, it's two commits.
+- `main` is always deployable. This is **enforced**, not hoped for: branch protection + required CI checks (Layer 16).
+- Every change is a branch → PR → Vercel preview → merge.
+- Commit format `type: description` — `feat`, `fix`, `refactor`, `docs`, `schema`, `test`, `chore`.
+- One logical change per commit. If the message needs "and", it's two commits.
+- Dependabot (or equivalent) on for dependency updates.
 
 ---
 
-## Layer 13 — No magic numbers (or magic strings)
+## Layer 13 — No magic numbers or strings
 
-### Where constants live in a React project
-```
-src/
-  constants/
-    index.js        ← all named values: timing defaults, limits, formats
-    jobStatuses.js  ← all job status strings in one place
-    planTiers.js    ← plan tier names and hierarchy
-```
-
-See `snippets/constants.js` for the full starter file ready to copy in.
+Named constants in `src/constants/`, each with a comment. Statuses, categories, limits, and plan tiers are all constants.
+See `snippets/constants.ts`.
 
 ---
 
 ## Layer 14 — Repo hygiene
 
-### Standard root — nothing else
+### Standard root
 ```
-README.md         ← always
-CLAUDE.md         ← always
-ROADMAP.md        ← always (living document)
-.gitignore        ← always
-package.json      ← dependencies
-vite.config.js    ← build config
-index.html        ← Vite entry point
+README.md  CLAUDE.md  ROADMAP.md  SPEC.md  .gitignore  .env.example
+package.json  tsconfig.json  next.config.ts  eslint.config.mjs  vitest.config.ts
+src/  supabase/  tests/  docs/  .github/workflows/
 ```
-
-### .gitignore minimums
-```
-node_modules/
-dist/
-.env
-.env.local
-.env.*.local
-.DS_Store
-```
-
 ### Environment variables
-All secrets in `.env.local` — never committed.
-Always document required variables in README.md so any new session knows what is needed.
+- Real values only in `.env.local` (gitignored). **`.env.example` with empty values is committed** and documents every variable.
+- **Prefix rule:** anything starting with `NEXT_PUBLIC_` is shipped to every visitor's browser. Only publishable values (Supabase URL, publishable/anon key, Stripe publishable key) may carry it. **Secrets never do.**
+- Parse env with zod at startup so a missing variable fails immediately, not at 2 a.m.
 
 ### ROADMAP.md is permanent and living
-- Future features
-- Known issues and tech debt
-- Ideas to revisit
-- Completed milestones (checked off, not deleted — history matters)
+Future features, known issues, tech debt, ideas, and completed milestones (checked off, not deleted).
 
 ---
 
 ## Layer 15 — CLAUDE.md context
 
-Same rule as the Python standard. See `templates/CLAUDE-web.md` for the web project template.
-
-The standing instruction that never changes:
+Same rule as the Python standard. See `templates/CLAUDE-web.md`.
 > The last thing done in every session is updating CLAUDE.md and committing it.
+
+---
+
+## Layer 16 — Testing
+
+### The rule
+> Test the logic that costs money or trust when it breaks. Coverage percentage is not a goal.
+
+### What to test, in priority order
+1. **Pure business logic** — money math, totals, state-machine transitions, scheduling rules. Fast Vitest unit tests; no mocks needed because the logic is pure (that's why Layer 4 keeps it in `lib/`).
+2. **Row Level Security** — a test that logs in as tenant A and proves tenant B's rows are invisible and unwritable. This is the highest-value test in a multi-tenant app.
+3. **Critical user flows** — 1 to 3 Playwright end-to-end tests (sign in, the main create flow, payment/checkout if present).
+4. **Webhook handlers** — signature rejected when invalid; replaying the same event does nothing twice.
+
+### What not to test
+Library internals, trivial getters, styling, and anything where the test would just mock the code it claims to test.
+
+### Habit
+A bug fix starts with a failing test that reproduces the bug. Then the fix. Then the test stays.
+
+### CI (GitHub Actions) — runs on every PR
+`npm ci` → lint → typecheck → unit tests → build. Template: `templates/ci/web-ci.yml`.
+Required status checks block merging, which is what makes "main is always deployable" real.
+
+---
+
+## Layer 17 — Security and secrets
+
+### Database
+- **RLS on every table**, enabled in the same migration that creates the table. No policy = no access, which is the safe default.
+- Prefer **least privilege**: grant `authenticated` only what the policies need; grant `anon` nothing unless a table is intentionally public. Do **not** run blanket `GRANT ALL ... TO anon` as a fix for permission errors — fix the policy instead.
+- Policy template: `snippets/rls-tenant.sql`. Use `(select auth.uid())` (wrapped) so Postgres evaluates it once per query.
+- Run the Supabase security advisor after schema changes.
+- Verify against current Supabase docs when starting a project — key formats and default grants have been changing.
+
+### Secrets
+- The **service-role key and all third-party secrets are server-only** (route handlers, server actions, edge functions). Never in client code, never in `NEXT_PUBLIC_*`.
+- A secret ever pasted in chat or committed is considered leaked: rotate it.
+- Enable GitHub secret scanning; add a pre-commit check.
+
+### Money
+- Store and compute money as **integer cents** (or a decimal library). Never JavaScript floats.
+- Timestamps are `timestamptz`, stored in UTC; format for display in the tenant's timezone.
+
+### Webhooks and external calls
+- **Verify signatures** on every inbound webhook (payments, messaging).
+- Make handlers **idempotent**: store the event id; if seen, return success and do nothing.
+- Set timeouts and retries on outbound calls. State the cost of any paid API before integrating it.
+
+### Outbound messaging (SMS / email)
+- Obtain and record consent; honor opt-out (e.g. STOP) automatically.
+- US SMS requires carrier registration for application-to-person traffic — start it early, it takes time.
+- Include required identification and unsubscribe links in marketing email.
+
+### Plans and entitlements
+Enforced server-side (Layer 2). The client check only decides what to *show*.
 
 ---
 
 ## New web app checklist
 
-Before writing any feature code, these must exist:
+Before writing any feature code:
 
-- [ ] CLAUDE.md created (from templates/CLAUDE-web.md) with standards pointer
-- [ ] README.md with project description and required environment variables listed
-- [ ] ROADMAP.md initialized
-- [ ] .gitignore configured (node_modules, dist, .env files)
-- [ ] Git repo initialized, first commit made
-- [ ] Supabase project created, region selected, RLS enabled
-- [ ] `src/lib/supabase.js` — single Supabase client instance created
-- [ ] Run `GRANT ALL ON ALL TABLES IN SCHEMA public TO anon; GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;` in SQL Editor — required when tables are created via SQL (not the Supabase UI); without this, all queries return permission denied regardless of RLS setting
-- [ ] `src/constants/` folder created with index.js and jobStatuses.js
-- [ ] `operator_settings` table created with all three tiers (preferences, flags, plan)
-- [ ] `app_logs` table created
-- [ ] `SettingsContext` and `useSettings` hook wired at app root
-- [ ] `useFeatureFlags` hook created
-- [ ] `logger.js` wired to settings store and Supabase
-- [ ] React Error Boundary component at app root
+**Project setup**
+- [ ] Repo created from `templates/web-project-structure.md`; first commit made
+- [ ] `CLAUDE.md` (from `templates/CLAUDE-web.md`), `README.md`, `ROADMAP.md`, `SPEC.md` created
+- [ ] `.gitignore` configured; `.env.example` committed; real values only in `.env.local`
+- [ ] Known deviations table filled in (even if "none")
+
+**Data and security**
+- [ ] Supabase project created, region chosen
+- [ ] `supabase/migrations/` initialized; schema created via migrations, not only the SQL editor
+- [ ] RLS enabled with policies on every table; no blanket `anon` grants
+- [ ] `tenants`, `tenant_settings`, `tenant_plans`, `app_logs` tables created
+- [ ] Types generated into `src/types/database.ts`
+- [ ] Service-role key confirmed server-only; no secret has a `NEXT_PUBLIC_` prefix
+
+**Code foundations**
+- [ ] `src/lib/supabase` clients (browser + server) — one definition each
+- [ ] `src/constants/` with `index.ts`, `flags.ts`, `plans.ts`
+- [ ] `SettingsProvider`, `useSettings`, `useFeatureFlags`, `QueryProvider` wired at the root
+- [ ] `logger.ts` wired to settings + `app_logs`; `no-console` lint rule on
+- [ ] `error.tsx` / `global-error.tsx` in place
 - [ ] Loading, error, and empty states planned for every data-fetching component
-- [ ] Every feature has a flag in operator_settings before it is built
-- [ ] Every async function follows the standard try/catch/finally pattern
-- [ ] No hardcoded values in components — all from constants or settings store
+- [ ] Every feature has a registered flag before it is built
+
+**Quality and operations**
+- [ ] Vitest installed; first test written (even a trivial one — establishes the pattern)
+- [ ] RLS isolation test written once there are two tenants' worth of data
+- [ ] CI workflow (`templates/ci/web-ci.yml`) running; branch protection requires it
+- [ ] Error tracker and uptime check configured before first real user
+- [ ] Backup plan written down before the first migration that touches real data
 
 ---
 
 ## Stack reference
 
 | Layer | Tool | Notes |
-|-------|------|-------|
-| Database | Supabase (PostgreSQL) | Single source of truth; RLS always enabled; always run GRANT ALL ON ALL TABLES to anon + authenticated after creating tables via SQL |
-| Auth | Supabase Auth | Built in; never roll your own |
-| Frontend | React + Vite | Vite for fast dev and builds |
-| Hosting | Vercel | Deploys on every push to main |
-| Global state | React Context | Settings, auth state |
-| Local state | useState / useReducer | Component-level only |
-| Data fetching | Custom hooks | One hook per data domain |
-| Styling | CSS variables / Tailwind | Tokens in CSS variables |
-| SMS | Twilio | Via Supabase Edge Functions |
-| Payments | Stripe | Webhooks → Supabase |
-| File storage | Cloudflare R2 | Zero egress fees; URLs stored in Supabase |
-| Email | SendGrid | Free tier |
+|---|---|---|
+| Framework | Next.js (App Router) + TypeScript strict | Vite SPA is an approved variant |
+| Database | Supabase (Postgres) | Schema via migrations; RLS always |
+| Auth | Supabase Auth | Never roll your own |
+| Server state | TanStack Query | Wrapped in feature hooks |
+| Global client state | React Context | Settings, auth only |
+| Local state | `useState` / `useReducer` | Component-level only |
+| Validation | zod | Boundaries and env |
+| Styling | CSS variables (tokens) / Tailwind | See `web-frontend-design.md` |
+| Tests | Vitest, Playwright | CI-enforced |
+| Monitoring | Sentry (or equivalent), uptime checker | Layer 7 |
+| Hosting | Vercel | Preview per PR |
+| SMS | Twilio (server-side only) | Consent + opt-out required |
+| Payments | Stripe | Webhooks → Supabase, idempotent |
+| File storage | Cloudflare R2 or Supabase Storage | Store URLs in the database |
+| Email | SendGrid or equivalent | Server-side only |
 
 ---
 
-*This document mirrors app-framework.md in structure and intent.*
-*Last updated: September 2026*
+*Mirrors `app-framework.md` in structure and intent.*
+*Last updated: October 2026.*
 *When a new pattern is established in a web project, add it here.*

@@ -21,9 +21,9 @@ The same principle that drives the 15-layer app framework applies here:
 
 ---
 
-## The 6 design system layers
+## The 7 design system layers
 
-Every web project built to this standard includes all 6 layers before any component is written.
+Every web project built to this standard includes all 7 layers before any component is written.
 
 1. **Token foundation** — all design values defined as CSS custom properties in `globals.css`
 2. **Typography scale** — a fixed set of sizes and weights; components pick from the scale
@@ -31,6 +31,7 @@ Every web project built to this standard includes all 6 layers before any compon
 4. **Component token groups** — per-component variables scoped in globals, not in module files
 5. **Global base styles** — reusable classes (buttons, utilities) defined once in globals
 6. **Variable lookup rule** — the enforcement mechanism that keeps the system intact
+7. **Accessibility** — contrast, focus, keyboard, semantics, motion, and touch targets are built into the tokens and base styles
 
 ---
 
@@ -53,7 +54,8 @@ as a named custom property. All other CSS files reference these tokens — never
 - Border colors and alpha variants
 - Semantic aliases (what a color *means*, not what it *is*)
 - Component token groups (buttons, cards, badges, etc.)
-- Layout constants (max-width, nav height, spacing scale)
+- Layout constants (max-width, nav height)
+- Spacing scale, z-index scale, motion tokens, focus-ring token (see "Layout, motion and focus tokens" below)
 - Theme overrides (`[data-theme="light"]` or `[data-theme="dark"]`)
 
 ### What does not belong in globals
@@ -69,9 +71,35 @@ src/
   components/
     Nav/
       Nav.module.css  ← references globals tokens only, no raw values
-    FishCard/
-      FishCard.module.css
+    Card/
+      Card.module.css
 ```
+
+### Layout, motion and focus tokens
+Define these once so no component invents a margin, a stacking order, or an animation speed:
+
+```css
+:root {
+  /* Spacing scale — 4px base. Components use these for margin, padding, gap. */
+  --space-1: 0.25rem;  --space-2: 0.5rem;   --space-3: 0.75rem;  --space-4: 1rem;
+  --space-5: 1.5rem;   --space-6: 2rem;     --space-7: 3rem;     --space-8: 4rem;
+
+  /* z-index scale — named layers, never raw numbers in components */
+  --z-base: 0;  --z-sticky: 100;  --z-dropdown: 200;  --z-drawer: 300;  --z-modal: 400;  --z-toast: 500;
+
+  /* Motion — durations and easing as tokens (reduced-motion handled in Layer 7) */
+  --dur-fast: 120ms;  --dur-base: 200ms;  --dur-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Focus ring and touch target (Layer 7) */
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
+  --target-min: 44px;
+}
+```
+Breakpoints: CSS custom properties cannot be used inside `@media` conditions. Pick a small set once
+(for example 40rem / 64rem / 80rem), document them as a comment block in globals.css, and prefer **container queries**
+or fluid sizing (`clamp()`) over many breakpoints for component-level responsiveness.
 
 ### globals.css section order
 Organize in this order so the token dependency chain is always readable top to bottom:
@@ -91,7 +119,7 @@ Organize in this order so the token dependency chain is always readable top to b
 12. Component tokens — Badges & labels
 13. Component tokens — [additional groups as needed]
 14. Fixed data colors (e.g. rarity/tier — never theme-switched)
-15. Misc layout tokens
+15. Layout tokens — spacing scale, z-index scale, motion, focus ring, minimum target size
 16. Theme overrides [data-theme="light"] or [data-theme="dark"]
 17. Reset & base
 18. Typography base styles
@@ -449,6 +477,95 @@ Before writing any value in a `.module.css` file:
 
 ---
 
+## Layer 7 — Accessibility
+
+*Added 2026-10-04. Target: **WCAG 2.2 level AA**. Accessible-by-default is far cheaper than retrofitting, and it improves
+the experience for everyone — keyboard users, small screens, bright sunlight, tired eyes.*
+
+### The rule
+> Every component is usable by keyboard, readable at the required contrast, and understandable without color or motion.
+> Accessibility lives in the tokens and base styles so components inherit it instead of re-implementing it.
+
+### 1. Color and contrast
+- Body text ≥ **4.5:1** against its background; large text (≥ 24px, or ≥ 18.5px bold) ≥ **3:1**.
+- UI boundaries, icons that convey meaning, and focus indicators ≥ **3:1**.
+- **Check every foreground/background token pair in BOTH themes.** A pair that passes in dark can fail in light.
+- Document approved pairs next to the tokens (a short comment: `/* --text-mid on --card-bg: 7.2:1 */`).
+- Never use color as the only signal — pair it with text, an icon, or a pattern (errors, status badges, required fields).
+
+### 2. Focus
+- Every interactive element has a **visible** `:focus-visible` style. Never `outline: none` without a replacement.
+- Sticky headers must not hide the focused element: set `scroll-padding-top` to the header height.
+
+```css
+:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+
+html { scroll-padding-top: var(--nav-height); }
+```
+
+### 3. Keyboard and semantics
+- Use the **native element** first: `<button>` for actions, `<a href>` for navigation, `<label for>` for inputs. A clickable `<div>` is a bug.
+- Everything reachable and operable by keyboard, in a logical order. Provide a **skip link** to main content.
+- Dialogs, drawers, and menus: focus moves in on open, is contained while open, **Escape closes**, and focus returns to the trigger. Prefer the native `<dialog>` element or a well-maintained library over hand-rolling.
+- One `<h1>` per page, headings in order, landmark regions (`header`, `nav`, `main`, `footer`).
+- Images: meaningful `alt` text; decorative images `alt=""`.
+- Use ARIA only when no native element does the job. Wrong ARIA is worse than none.
+
+```css
+.skip-link { position: absolute; left: var(--space-3); top: -4rem; z-index: var(--z-toast); }
+.skip-link:focus { top: var(--space-3); }
+
+.sr-only {                      /* visually hidden, still read by screen readers */
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+```
+
+### 4. Touch targets
+- Minimum **24×24 CSS px** (WCAG 2.2 AA); aim for **44×44 (`--target-min`)** for primary touch controls.
+- Space small controls apart so adjacent targets are not easy to mis-tap.
+
+```css
+.btn-primary, .btn-secondary { min-height: var(--target-min); }
+```
+
+### 5. Motion and preferences
+- Respect `prefers-reduced-motion`; never auto-play moving content without a pause control.
+- Declare `color-scheme` so form controls and scrollbars match the theme, and default to the user's `prefers-color-scheme`.
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+  }
+}
+:root { color-scheme: dark light; }
+```
+
+### 6. Zoom and reflow
+- Size text in `rem`, never `px`; do not give text containers fixed heights.
+- Content must work at **200% zoom** and reflow to a **320px-wide** viewport without horizontal scrolling (data tables may scroll inside their own container).
+- Never disable pinch-zoom (`user-scalable=no` / `maximum-scale=1`).
+
+### 7. Forms and live status
+- Every input has a visible label. Use `autocomplete` attributes on personal-data fields.
+- Error text is linked to its field (`aria-describedby`), says what went wrong and how to fix it, and is not conveyed by color alone.
+- Async status from Layer 5 (loading, saved, failed) is announced: `role="status"` for polite updates, `role="alert"` for errors.
+
+### 8. How accessibility is checked
+| Check | Tool | When |
+|---|---|---|
+| Static JSX rules | `eslint-plugin-jsx-a11y` (ships in the Next.js ESLint config) | Every commit / CI |
+| Automated page scan | axe (`@axe-core/playwright`) in e2e tests, or Lighthouse CI | CI, per key page |
+| Keyboard pass | Unplug the mouse: reach and operate every control; check focus order and visibility | Every new component |
+| Screen-reader smoke test | One pass with NVDA/VoiceOver/TalkBack on each key flow | Before launch |
+| Contrast pairs | Browser devtools contrast checker, both themes | When tokens change |
+
+Automated tools catch only part of the problems; the keyboard pass catches much of the rest.
+
+---
+
 ## Audit process
 
 When inheriting a project or identifying drift in an existing one, run this audit
@@ -475,6 +592,10 @@ outside `:root` or a theme block. Categorize as:
 - **3c** — unique value with no existing token (needs a new token)
 - **3d** — font-family literals (replace with `--font-display` / `--font-body`)
 - **3e** — font-size/weight with no scale (the entire scale is missing — add it)
+
+### Phase 3.5 — Accessibility spot-check
+While the stylesheet is open: list text/background pairs that fail contrast, any `outline: none`, any pixel font sizes,
+and any control smaller than the minimum target. Add the findings to the same report.
 
 ### Phase 4 — Remediation order
 1. Add any missing tokens to globals (scale, border alpha, new semantic tokens)
@@ -519,7 +640,7 @@ to make the right choice.
 
 Before writing any component CSS, these must exist:
 
-- [ ] `globals.css` created with all 6 layers
+- [ ] `globals.css` created with all 7 layers
 - [ ] Font families chosen, loaded (Google Fonts or local), and tokenized
 - [ ] Typography scale defined (`--fs-*`, `--fw-*`, `--lh-*`)
 - [ ] Core palette defined (`--color-*`)
@@ -534,6 +655,10 @@ Before writing any component CSS, these must exist:
 - [ ] Typography utility classes written (`eyebrow`, `caption`, etc.)
 - [ ] `page-wrap` layout utility written
 - [ ] Light/dark theme overrides in place
+- [ ] Spacing, z-index, motion, focus-ring, and target-size tokens defined
+- [ ] Contrast checked for every text/background pair in both themes (≥ 4.5:1 text, ≥ 3:1 UI)
+- [ ] `:focus-visible` style, skip link, `.sr-only`, and reduced-motion rule in global base styles
+- [ ] `eslint-plugin-jsx-a11y` enabled; axe scan added to e2e tests for key pages
 - [ ] Variable lookup rule added to project's CLAUDE.md
 - [ ] Design theme description added to project's CLAUDE.md (no hex values)
 - [ ] globals.css token map table added to project's CLAUDE.md
@@ -565,6 +690,6 @@ and token names for that project:
 
 ---
 
-*This document is derived from real project work on befish.cc (September 2026).*
+*Derived from real project work; see the README's "Reference implementations" for working examples.*
 *When a new pattern is established in a web project, add it here.*
-*Last updated: September 2026*
+*Last updated: October 2026*

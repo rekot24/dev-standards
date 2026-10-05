@@ -3,7 +3,7 @@
 A living template for the **project instructions** of any new project (the instructions box in a Claude project).
 It sets up the working loop quickly; each project then adds its own About, stack and safety details.
 
-Lives in `dev-standards/templates/`. Sibling templates: `CLAUDE.md` / `CLAUDE-web.md` (repo facts), plus ROADMAP and SPEC (the plan).
+Lives in `dev-standards/templates/`. Sibling templates: `CLAUDE.md` / `CLAUDE-web.md` (repo facts), `ROADMAP.md` and `SPEC.md` (the plan), and `ci/` (automated checks).
 
 ---
 
@@ -87,12 +87,12 @@ Working style and accountability
 
 Do these in order. Most take a few minutes.
 
-1. **Repo.** Create it. Add `README.md` (including required environment variables), `.gitignore` (at least `node_modules`, `dist`, `.env`, `.env.*`), and a line pointing to dev-standards.
-2. **Working docs.** Add `CLAUDE.md` (from `templates/CLAUDE.md` or `CLAUDE-web.md`), `ROADMAP.md`, and `SPEC.md` (empty template). Put the roadmap headings in this order: Goal, Status right now, Done, Now, Next, Later, Not now, Issues to be addressed, Log.
+1. **Repo.** Create it. Add `README.md` (including required environment variables), `.gitignore` (at least `node_modules`, `.next`, `dist`, `.env`, `.env.*`) and `.env.example`, and a line pointing to dev-standards.
+2. **Working docs.** Copy `CLAUDE.md` (from `templates/CLAUDE.md` or `CLAUDE-web.md`), `ROADMAP.md`, and `SPEC.md` from `templates/`. Put the roadmap headings in this order: Goal, Status right now, Done, Now, Next, Later, Not now, Issues to be addressed, Log.
 3. **Known deviations.** In `CLAUDE.md`, add the table up front: any place the project does not follow dev-standards, with the reason and the milestone that fixes it.
 4. **Shared folder.** Connect the project folder to Cowork. Confirm Cowork can write a file there and that Claude Code opens the same folder.
 5. **Instructions.** Paste the baseline block above into the project and fill in the placeholders.
-6. **Safety net before the first deploy.** Backup command works and is scheduled; deploy writes to a new release folder and switches atomically; rollback is written in the first SPEC.
+6. **Safety net before the first deploy.** Backup command works and is scheduled; deploy writes to a new release folder and switches atomically (hosted platforms like Vercel do this for you); rollback is written in the first SPEC. CI (`templates/ci/`) is running and required on `main`.
 7. **First milestone.** Plan it in chat, end with the build brief, write SPEC.md and ROADMAP.md into the shared folder.
 
 ---
@@ -120,4 +120,5 @@ Each rule keeps its reason. If a reason stops being true, change or drop the rul
 
 ## Changelog
 
-- 2026-10-04 Created from the Liora's Academy instructions after the first full review. Added: shared-folder rule, Cowork-writes-docs rule, known-deviations table, deploy-never-empties rule, milestone close-out ownership.
+- 2026-10-04 Updated: templates for ROADMAP.md, SPEC.md and CI now exist; quick-start references them.
+- 2026-10-04 Created from a real project's instructions after its first full review. Added: shared-folder rule, Cowork-writes-docs rule, known-deviations table, deploy-never-empties rule, milestone close-out ownership.
