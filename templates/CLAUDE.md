@@ -73,7 +73,8 @@ These apply every session without being included in the prompt:
 11. Pure logic gets pytest tests; every bug fix starts with a failing test. Run `ruff` and `pytest` before committing.
 12. Never commit secrets. Names of required variables go in `.env.example`. Never ask for passwords or tokens in chat.
 13. Flag when planning runs long without building. If two sessions in a row end with no commit or merge, say so.
-14. At the end of every session, before closing:
+14. Commits: write a detailed message (summary line, then Why / What changed / Verified / Notes — dev-standards Layer 12) and give Joshua the exact commands to run, with the terminal and folder.
+15. At the end of every session, before closing:
     - Add a dated entry to the session log above summarizing what was done and decided
     - Update current state (working / in progress / known broken)
     - Add any new architectural choices to key decisions

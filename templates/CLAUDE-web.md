@@ -91,7 +91,8 @@ These apply every session without being included in the prompt:
 18. Tests: pure business logic gets unit tests; every bug fix starts with a failing test. CI must pass before merging.
 19. Never ask for passwords or tokens in chat; never commit `.env.local`.
 20. Flag when planning runs long without building. If two sessions in a row end with no commit or merge, say so.
-21. At the end of every session, before closing:
+21. Commits: write a detailed message (summary line, then Why / What changed / Verified / Notes — dev-standards Layer 12) and give Joshua the exact commands to run, with the terminal and folder.
+22. At the end of every session, before closing:
     - Add a dated entry to the session log
     - Update current state (working / in progress / known broken)
     - Add new architectural choices to key decisions; abandoned approaches to tried and rejected

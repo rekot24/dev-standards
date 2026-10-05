@@ -42,4 +42,5 @@ inside a real project.
 - See `docs/decisions.md`
 
 ## Log
+- 2026-10-04 Layer 12 extended: detailed commit message standard (summary + Why / What changed / Verified / Notes), added to both frameworks, CLAUDE templates, and PROJECT-INSTRUCTIONS.
 - 2026-10-04 Audit pass: 17-layer frameworks, project-agnostic rewrite, accessibility layer, TS snippets, ROADMAP/SPEC/CI templates.

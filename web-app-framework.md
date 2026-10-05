@@ -353,8 +353,39 @@ export function useThings(opts?: { status?: ThingStatus }): UseQueryResult<Thing
 
 - `main` is always deployable. This is **enforced**, not hoped for: branch protection + required CI checks (Layer 16).
 - Every change is a branch → PR → Vercel preview → merge.
-- Commit format `type: description` — `feat`, `fix`, `refactor`, `docs`, `schema`, `test`, `chore`.
-- One logical change per commit. If the message needs "and", it's two commits.
+- Commit summary line: `type: description` (optionally `type(scope): description`) — `feat`, `fix`, `refactor`, `docs`, `schema`, `test`, `chore`. Imperative, about 72 characters.
+- One logical change per commit. If the summary line needs "and", it's two commits.
+- **Every commit gets a detailed message** — a short summary line plus a body. The commit log is the project's step-by-step
+  history and the way back to a known-good point, so write it for the person reading it in six months. Body sections
+  (omit one only if it is empty):
+  - **Why** — the problem or the decision behind the change
+  - **What changed** — files and behavior, in plain words
+  - **Verified** — how it was checked (tests run, manual steps) and the result
+  - **Notes** — migration number, how to revert, follow-ups, any Known deviation touched
+  End AI-assisted commits with the `Co-Authored-By` trailer the tool specifies.
+- When an assistant asks you to commit, it hands over the ready-to-paste message and the exact commands (which terminal,
+  which folder), not just "commit this". Multi-line messages: `git commit -F message.txt`, or in PowerShell
+  `@'...'@ | git commit -F -`.
+
+Example:
+
+```
+fix(sync): stop deleted lessons coming back after a stale device syncs
+
+Why:
+A device with an old copy overwrote newer data (last write wins).
+
+What changed:
+- Writes now send only the rows that changed; removals are explicit.
+- Writes about deleted lessons are skipped and reported, never recreated.
+
+Verified:
+- api tests: 16 passed, including the stale-device replay.
+- Manual: deleted a lesson on one device; it stayed deleted on the other.
+
+Notes:
+- No schema change. Revert this commit to return to whole-snapshot sync.
+```
 - Dependabot (or equivalent) on for dependency updates.
 
 ---

@@ -43,6 +43,7 @@ Source of truth and the shared folder
 Who writes where
 - Cowork writes ROADMAP.md, SPEC.md and CLAUDE.md directly into the shared folder. Do not hand them over as downloads or paste them into chat. Read the existing file first and edit it rather than overwrite it. After writing, say in one line which files changed.
 - Cowork does not commit or push [and cannot write to the remote on this plan; do not try]. Joshua or Claude Code commits and pushes.
+- Commits: whenever a change needs a commit, give Joshua the commands and a ready-to-paste detailed commit message (summary line, then Why / What changed / Verified / Notes, per dev-standards Layer 12), with the terminal and folder.
 - Small change = one file, about 30 lines or fewer, and nothing touching [database schema, auth, deploy workflow, web-server config, DNS or tunnel/access settings]. Tell Joshua the exact edit and where.
 - Anything bigger or riskier: the SPEC route. Write a SPEC.md for Claude Code. Use a single drop-in file Joshua applies himself only when he asks, or when the change is one self-contained file.
 
@@ -105,6 +106,7 @@ Each rule keeps its reason. If a reason stops being true, change or drop the rul
 |---|---|
 | Cowork writes the working docs straight into the shared folder | Hand-copying drifts; Cowork and Claude Code must read the same files |
 | Cowork never commits or pushes | Commits are the human checkpoint; the plan may also not allow it |
+| Every commit message is detailed and handed over ready to paste | The log is the step-by-step history and the way back to a known-good point; a vague message makes that useless |
 | Check the shared folder's branch before writing | A stale copy once held a branch four commits behind; docs written to it would land in the wrong place |
 | One home per fact (instructions, CLAUDE.md, ROADMAP, SPEC) | Duplicated state rots and contradicts itself |
 | Small change = about 30 lines, one file, nothing risky | Past that, instructions are error-prone; a SPEC and Claude Code are safer |
@@ -120,5 +122,6 @@ Each rule keeps its reason. If a reason stops being true, change or drop the rul
 
 ## Changelog
 
+- 2026-10-04 Added: detailed commit messages, handed over ready to paste (matches dev-standards Layer 12).
 - 2026-10-04 Updated: templates for ROADMAP.md, SPEC.md and CI now exist; quick-start references them.
 - 2026-10-04 Created from a real project's instructions after its first full review. Added: shared-folder rule, Cowork-writes-docs rule, known-deviations table, deploy-never-empties rule, milestone close-out ownership.

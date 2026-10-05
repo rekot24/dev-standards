@@ -3,6 +3,11 @@
 Architectural decisions for dev-standards itself, with dates and reasons. Newest first.
 *Format: decision · why · what would change our mind.*
 
+## 2026-10-04 — Detailed commit messages (summary line + body)
+**Decision:** Every commit has a short summary line (`type: description`) and a body with Why, What changed, Verified, and Notes. Assistants hand over the full message and exact commands whenever a commit is needed.
+**Why:** The commit log is the step-by-step history and the way back to a known-good point; one-line messages lose the reasoning. Handing over a ready-to-paste message removes the friction that makes people write "update".
+**Revisit if:** the body becomes boilerplate nobody reads — then trim the sections to the ones that earn their place.
+
 ## 2026-10-04 — Standards are project-agnostic
 **Decision:** Framework docs describe patterns generically. Real projects appear only as *examples* (README "Reference implementations", and the "Example implementation" line in `web-patterns.md`).
 **Why:** The repo should apply to any project, past or future; project-specific names in the rules made them look like requirements.

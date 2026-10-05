@@ -359,11 +359,21 @@ def load_profile(self, name: str) -> Optional[Profile]:
 
 - `main` is always working. Never commit broken code to it.
 - Every feature or experiment gets a branch. Works → merge. Doesn't → delete; nothing lost.
-- **Commit message:** `type: description` — `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
+- **Commit summary line:** `type: description` — `feat`, `fix`, `refactor`, `docs`, `test`, `chore`. Imperative, about 72 characters.
   Bad: `fixed stuff`. Good: `fix: reconnect no longer blocks the main loop`.
-- Subject line only needs to be the short summary; put detail in the body. The message is the commit text,
-  not a copy of the `git commit` command.
-- One logical change per commit. "And" in the message means two commits.
+- One logical change per commit. "And" in the summary line means two commits.
+- **Every commit gets a detailed message** — a short summary line plus a body. The commit log is the project's step-by-step
+  history and the way back to a known-good point, so write it for the person reading it in six months. Body sections
+  (omit one only if it is empty):
+  - **Why** — the problem or the decision behind the change
+  - **What changed** — files and behavior, in plain words
+  - **Verified** — how it was checked (tests run, manual steps) and the result
+  - **Notes** — migration number, how to revert, follow-ups, any Known deviation touched
+  End AI-assisted commits with the `Co-Authored-By` trailer the tool specifies.
+- When an assistant asks you to commit, it hands over the ready-to-paste message and the exact commands (which terminal,
+  which folder), not just "commit this". Multi-line messages: `git commit -F message.txt`, or in PowerShell
+  `@'...'@ | git commit -F -`.
+- The message is the commit text, not a copy of the `git commit` command.
 - **Refactoring** (change how, not what): branch → refactor → verify the tests still pass → merge. The tests are what make this fearless.
 - **pre-commit** hooks (ruff) and **CI** (`templates/ci/python-ci.yml`) back up the habit.
 
